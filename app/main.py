@@ -76,7 +76,7 @@ def signup(
     }
 
     print(f"OTP for signup ({phone_number}): {otp}")
-    return {"message": "OTP sent to your phone (simulated)"}
+    return {"message": f"OTP sent to your phone (simulated):{otp}"}
 
 @app.post("/verify-signup/")
 def verify_signup(
@@ -120,7 +120,7 @@ def login(
     otp = str(randint(100000, 999999))
     otp_store[phone_number] = {"otp": otp, "user_id": user.id}
     print(f"OTP for login ({phone_number}): {otp}")
-    return {"message": "OTP sent to your phone (simulated)"}
+    return {"message": f"OTP sent to your phone (simulated) : {otp}"}
 
 @app.post("/verify-login/")
 def verify_login(
