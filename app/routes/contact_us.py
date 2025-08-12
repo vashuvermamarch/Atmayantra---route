@@ -1,12 +1,19 @@
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, Form, HTTPException, Depends
+from sqlalchemy.orm import Session
 from pydantic import EmailStr
 from typing import Optional
+from app.database import SessionLocal
+from app import models
 
 router = APIRouter()
 
-# In-memory storage
-contacts_db = {}
-contact_id_counter = 1
+# Dependency to get DB session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 @router.post("/")
@@ -14,33 +21,28 @@ def create_contact(
     name: str = Form(...),
     email: EmailStr = Form(...),
     phone_no: str = Form(...),
-    message: str = Form(...)
+    message: str = Form(...),
+    db: Session = Depends(get_db)
 ):
-    global contact_id_counter
-
-    if phone_no in contacts_db:
+    existing = db.query(models.Contact).filter(models.Contact.phone_no == phone_no).first()
+    if existing:
         raise HTTPException(status_code=400, detail="Contact with this phone number already exists")
 
-    contact = {
-        "contact_id": contact_id_counter,
-        "name": name,
-        "email": email,
-        "phone_no": phone_no,
-        "message": message
-    }
-    contacts_db[phone_no] = contact
-    contact_id_counter += 1
+    contact = models.Contact(name=name, email=email, phone_no=phone_no, message=message)
+    db.add(contact)
+    db.commit()
+    db.refresh(contact)
     return contact
 
 
 @router.get("/")
-def get_all_contacts():
-    return list(contacts_db.values())
+def get_all_contacts(db: Session = Depends(get_db)):
+    return db.query(models.Contact).all()
 
 
 @router.get("/{phone_no}")
-def get_contact(phone_no: str):
-    contact = contacts_db.get(phone_no)
+def get_contact(phone_no: str, db: Session = Depends(get_db)):
+    contact = db.query(models.Contact).filter(models.Contact.phone_no == phone_no).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     return contact
@@ -51,17 +53,17 @@ def update_contact(
     phone_no: str,
     name: str = Form(...),
     email: EmailStr = Form(...),
-    message: str = Form(...)
+    message: str = Form(...),
+    db: Session = Depends(get_db)
 ):
-    contact = contacts_db.get(phone_no)
+    contact = db.query(models.Contact).filter(models.Contact.phone_no == phone_no).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
 
-    contact.update({
-        "name": name,
-        "email": email,
-        "message": message
-    })
+    contact.name = name
+    contact.email = email
+    contact.message = message
+    db.commit()
     return contact
 
 
@@ -70,25 +72,30 @@ def patch_contact(
     phone_no: str,
     name: Optional[str] = Form(None),
     email: Optional[EmailStr] = Form(None),
-    message: Optional[str] = Form(None)
+    message: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
 ):
-    contact = contacts_db.get(phone_no)
+    contact = db.query(models.Contact).filter(models.Contact.phone_no == phone_no).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
 
     if name:
-        contact["name"] = name
+        contact.name = name
     if email:
-        contact["email"] = email
+        contact.email = email
     if message:
-        contact["message"] = message
+        contact.message = message
 
+    db.commit()
     return contact
 
 
 @router.delete("/{phone_no}")
-def delete_contact(phone_no: str):
-    if phone_no not in contacts_db:
+def delete_contact(phone_no: str, db: Session = Depends(get_db)):
+    contact = db.query(models.Contact).filter(models.Contact.phone_no == phone_no).first()
+    if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
-    del contacts_db[phone_no]
+
+    db.delete(contact)
+    db.commit()
     return {"message": "Contact deleted successfully"}
