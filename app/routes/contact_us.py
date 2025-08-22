@@ -32,7 +32,7 @@ def create_contact(
     db.add(contact)
     db.commit()
     db.refresh(contact)
-    return contact   # now serializable ✅
+    return schemas.ContactResponse.model_validate(contact)  # ✅ Always serializable
 
 
 @router.get("/", response_model=list[schemas.ContactResponse])
