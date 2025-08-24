@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Form, HTTPException, Depends
+from fastapi import APIRouter, Form, Depends
 from sqlalchemy.orm import Session
 from pydantic import EmailStr
 from typing import Optional
@@ -16,7 +16,7 @@ def get_db():
         db.close()
 
 
-@router.post("/", response_model=schemas.ContactResponse)
+@router.post("/", response_model=schemas.APIResponse)
 def create_contact(
     name: str = Form(...),
     email: EmailStr = Form(...),
@@ -26,29 +26,43 @@ def create_contact(
 ):
     existing = db.query(models.Contact).filter(models.Contact.phone_no == phone_no).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Contact with this phone number already exists")
+        return {"success": False, "message": "Contact with this phone number already exists", "data": None}
 
     contact = models.Contact(name=name, email=email, phone_no=phone_no, message=message)
     db.add(contact)
     db.commit()
     db.refresh(contact)
-    return schemas.ContactResponse.model_validate(contact)  # ✅ Always serializable
+
+    return {
+        "success": True,
+        "message": "Contact created successfully",
+        "data": schemas.ContactResponse.model_validate(contact)
+    }
 
 
-@router.get("/", response_model=list[schemas.ContactResponse])
+@router.get("/", response_model=schemas.APIResponse)
 def get_all_contacts(db: Session = Depends(get_db)):
-    return db.query(models.Contact).all()
+    contacts = db.query(models.Contact).all()
+    return {
+        "success": True,
+        "message": "Contacts fetched successfully",
+        "data": [schemas.ContactResponse.model_validate(c) for c in contacts]
+    }
 
 
-@router.get("/{phone_no}", response_model=schemas.ContactResponse)
+@router.get("/{phone_no}", response_model=schemas.APIResponse)
 def get_contact(phone_no: str, db: Session = Depends(get_db)):
     contact = db.query(models.Contact).filter(models.Contact.phone_no == phone_no).first()
     if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found")
-    return contact
+        return {"success": False, "message": "Contact not found", "data": None}
+    return {
+        "success": True,
+        "message": "Contact fetched successfully",
+        "data": schemas.ContactResponse.model_validate(contact)
+    }
 
 
-@router.put("/{phone_no}", response_model=schemas.ContactResponse)
+@router.put("/{phone_no}", response_model=schemas.APIResponse)
 def update_contact(
     phone_no: str,
     name: str = Form(...),
@@ -58,17 +72,22 @@ def update_contact(
 ):
     contact = db.query(models.Contact).filter(models.Contact.phone_no == phone_no).first()
     if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found")
+        return {"success": False, "message": "Contact not found", "data": None}
 
     contact.name = name
     contact.email = email
     contact.message = message
     db.commit()
     db.refresh(contact)
-    return contact
+
+    return {
+        "success": True,
+        "message": "Contact updated successfully",
+        "data": schemas.ContactResponse.model_validate(contact)
+    }
 
 
-@router.patch("/{phone_no}", response_model=schemas.ContactResponse)
+@router.patch("/{phone_no}", response_model=schemas.APIResponse)
 def patch_contact(
     phone_no: str,
     name: Optional[str] = Form(None),
@@ -78,7 +97,7 @@ def patch_contact(
 ):
     contact = db.query(models.Contact).filter(models.Contact.phone_no == phone_no).first()
     if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found")
+        return {"success": False, "message": "Contact not found", "data": None}
 
     if name:
         contact.name = name
@@ -89,15 +108,20 @@ def patch_contact(
 
     db.commit()
     db.refresh(contact)
-    return contact
+
+    return {
+        "success": True,
+        "message": "Contact patched successfully",
+        "data": schemas.ContactResponse.model_validate(contact)
+    }
 
 
-@router.delete("/{phone_no}")
+@router.delete("/{phone_no}", response_model=schemas.APIResponse)
 def delete_contact(phone_no: str, db: Session = Depends(get_db)):
     contact = db.query(models.Contact).filter(models.Contact.phone_no == phone_no).first()
     if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found")
+        return {"success": False, "message": "Contact not found", "data": None}
 
     db.delete(contact)
     db.commit()
-    return {"message": "Contact deleted successfully"}
+    return {"success": True, "message": "Contact deleted successfully", "data": None}

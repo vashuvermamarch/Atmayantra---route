@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr
+from typing import Optional, Any
+from pydantic import BaseModel, EmailStr, ConfigDict
 
 class ContactBase(BaseModel):
     name: str
@@ -8,6 +9,10 @@ class ContactBase(BaseModel):
 
 class ContactResponse(ContactBase):
     id: int
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True   # 👈 instead of orm_mode = True
+# ✅ Generic response wrapper
+class APIResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[Any] = None
